@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>td_loop_detector</name>
+  <version>0.1.0</version>
+  <description>3D bag-of-word loop detector for pointcloud sequence</description>
+
+  <maintainer email="RockAutoLZU@gmail.com">RockAuto</maintainer>
+  <maintainer email="smallchimney@foxmail.com">Chimney Xu</maintainer>
+  <license>Apache2</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>tdbow</depend>
+</package>
