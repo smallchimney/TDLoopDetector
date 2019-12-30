@@ -42,7 +42,10 @@ sIsland::sIsland(TDBoW::QueryResults _Results) {
         span = std::make_pair(0, 0);
         return;
     }
-    std::sort(_Results.begin(), _Results.end(), TDBoW::Result::ltId);
+    std::sort(_Results.begin(), _Results.end(),
+            [](const TDBoW::Result& _A, const TDBoW::Result& _B) {
+        return _A.Id < _B.Id;
+    });
     span = std::make_pair(_Results.begin() -> Id, _Results.rbegin() -> Id + 1);
     score = 0; best_score = 0;
     for(const auto& result : _Results) {

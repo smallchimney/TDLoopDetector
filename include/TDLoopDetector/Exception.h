@@ -14,27 +14,42 @@
  * limitations under the License.
  **************************************************************************/
 /* *************************************************************************
-   * File Name     : MatchPair.h
+   * File Name     : Exception.h
    * Author        : smallchimney
    * Author Email  : smallchimney@foxmail.com
-   * Created Time  : 2019-12-11 22:08:31
+   * Created Time  : 2019-12-27 18:10:47
    * Last Modified : smallchimney
-   * Modified Time : 2019-12-26 14:35:57
+   * Modified Time : 2019-12-29 17:08:11
 ************************************************************************* */
-#ifndef __ROCKAUTO_TDLD_MATCH_PAIR_H__
-#define __ROCKAUTO_TDLD_MATCH_PAIR_H__
+#ifndef __ROCKAUTO_TDLD_EXCEPTION_H__
+#define __ROCKAUTO_TDLD_EXCEPTION_H__
 
-#include <tuple>
-#include <list>
-#include <vector>
+#include <TDBoW/Exception.h>
 
 namespace TDLoopDetector {
 
-// <history index, query index, distance>
-typedef std::tuple<size_t, size_t, float> MatchPair;
-typedef std::vector<MatchPair> MatchPairArray;
-typedef std::list<MatchPair> MatchPairList;
+// Continue use the TDBoW's Exceptions
+#define __DEF_EX(Ex) typedef ::TDBoW:: Ex Ex;
 
-}
+__DEF_EX(Exception)
+// Program design exceptions
+__DEF_EX(LogicException)
+__DEF_EX(NotInitailizedException)
+__DEF_EX(ParametersException)
+__DEF_EX(OutOfRangeException)
+__DEF_EX(MethodNotMatchException)
+// IO Exceptions
+__DEF_EX(IOException)
+__DEF_EX(FileNotExistException)
+__DEF_EX(FileNotOpenException)
+// Data Exceptions
+__DEF_EX(DataException)
+__DEF_EX(FormatException)
+__DEF_EX(EmptyDataException)
+__DEF_EX(NanDataException)
 
-#endif //__ROCKAUTO_TDLD_MATCH_PAIR_H__
+#undef __DEF_EX
+
+} // namespace TDLoopDetector
+
+#endif //__ROCKAUTO_TDBOW_EXCEPTION_H__

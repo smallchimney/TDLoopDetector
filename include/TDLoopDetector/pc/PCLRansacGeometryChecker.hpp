@@ -19,12 +19,13 @@
    * Author Email  : smallchimney@foxmail.com
    * Created Time  : 2019-12-12 13:18:53
    * Last Modified : smallchimney
-   * Modified Time : 2019-12-15 20:03:16
+   * Modified Time : 2019-12-27 17:39:39
 ************************************************************************* */
 #ifndef __ROCKAUTO_TDLD_PC_PCL_RANSAC_GEOMETRY_CHECKER_HPP__
 #define __ROCKAUTO_TDLD_PC_PCL_RANSAC_GEOMETRY_CHECKER_HPP__
 
 #include "traits.h"
+#include <TDLoopDetector/Exception.h>
 #include <TDLoopDetector/GeometryChecker.h>
 #include <TDBoW/TemplatedDescriptor.hpp>
 
@@ -51,9 +52,10 @@ public:
     typedef typename GeometryChecker<DIM>::PointPairsGeomChecker PointPairsGeomChecker;
 
     /**
-     * // todo: complete
-     * @param _Resolution
-     * @param _Threshold
+     * @brief  Build instance of RANSAC to do the geometry checking.
+     * @author smallchimney
+     * @param  _Resolution The minimum limit of the instance size (points count)
+     * @param  _Threshold  Consensus set resolution.
      */
     PCLRansacGeometryChecker(double _Resolution, int _Threshold, bool _SceneModel = false);
 
@@ -64,9 +66,9 @@ public:
      *         current instance
      */
     PointPairsGeomChecker checker() noexcept override {
-        using namespace std::placeholders;
         return std::bind(&PCLRansacGeometryChecker<PointT>::doGeometryCheck,
-                this, _1, _2, _3, _4);
+                this, std::placeholders::_1, std::placeholders::_2,
+                std::placeholders::_3, std::placeholders::_4);
     }
 
     /**
@@ -77,7 +79,7 @@ public:
      * @param  _Transform (out)  Only if the there are geometric consistency
      *                           between the two scenes, s.t. return {@code true}
      *                           this field will be filled the transform between
-     *                           the two scenes. (//todo: from where to where)
+     *                           the two scenes. (from model to scene)
      * @param  _HistoryKp        The key points in history scene
      * @param  _QueryKp          The key points in current scene
      * @return                   Whether there are geometric consistency between
@@ -115,23 +117,26 @@ public:
     bool empty() const noexcept { return size() == 0; }
 
     /**
-     * @brief  Set the  //todo: ???
+     * @brief  Set the consensus set resolution. This should be in metric units.
      * @author smallchimney
-     * @param  _Resolution  //todo: ???
+     * @param  _Resolution  Consensus set resolution.
      * @return              The instance itself
      */
-    PCLRansacGeometryChecker& setResolution(const double _Resolution) {
+    PCLRansacGeometryChecker& setRansacResolution(const double _Resolution) {
         m_cChecker.setGCSize(_Resolution);
         return *this;
     }
 
     /**
-     * @brief  Set the  //todo: ???
+     * @brief  Set the minimum limit of the instance, stands for ransac
+     *         must find more points. This value should be set according
+     *         to the density of pointcloud.
      * @author smallchimney
-     * @param  _Resolution  //todo: ???
+     * @param  _Threshold   The minimum limit of the instance size (points
+     *                      count)
      * @return              The instance itself
      */
-    PCLRansacGeometryChecker& setThreshold(unsigned long _Threshold) {
+    PCLRansacGeometryChecker& setRansacThreshold(int _Threshold) {
         m_cChecker.setGCThreshold(_Threshold);
         return *this;
     }
@@ -143,7 +148,7 @@ public:
      * @return         The instance itself
      */
     PCLRansacGeometryChecker& setSceneCloud(const PointCloudPtr& _Cloud) noexcept {
-        m_pSceneCloud.reset(_Cloud);
+        m_pSceneCloud = _Cloud;
         return *this;
     }
 
@@ -215,7 +220,7 @@ template <typename PointT>
 PCLRansacGeometryChecker<PointT>::PCLRansacGeometryChecker(
         const double _Resolution, const int _Threshold, const bool _SceneModel)
         : m_bSceneModelMode(_SceneModel), m_cChecker() {
-    setResolution(_Resolution).setThreshold(_Threshold);
+    setRansacResolution(_Resolution).setRansacThreshold(_Threshold);
 }
 
 /* ********************************************************************************
@@ -229,7 +234,7 @@ bool PCLRansacGeometryChecker<PointT>::doGeometryCheck(
     PointCloudPtr queryClouds;
     if(m_bSceneModelMode) {
         if(m_pSceneCloud == nullptr) {
-            throw std::runtime_error(TDBOW_LOG("The scene cloud is required in "
+            throw NotInitailizedException(TDBOW_LOG("The scene cloud is required in "
                     "scene-model mode, please call `setScene()` before `detectLoop()`"));
         }
         queryClouds = m_pSceneCloud;
@@ -266,9 +271,15 @@ template <typename PointT>
 typename PCLRansacGeometryChecker<PointT>::PointCloudPtr
 PCLRansacGeometryChecker<PointT>::_transform(const KeyPointArray& _Keys) const noexcept {
     auto cloud = boost::make_shared<PointCloud>();
+    if(_Keys.empty())return cloud;
     cloud -> resize(_Keys.size());
-    for(size_t i = 0; i < _Keys.size(); i++) {
-        memcpy(cloud -> points[i].data, _Keys[i].data(), sizeof(float) * DIM);
+    if(sizeof(cloud -> at(0)) == sizeof(_Keys[0])) {
+        memcpy(cloud -> at(0).data, _Keys[0].data(),
+               sizeof(_Keys[0]) * _Keys.size());
+    } else {
+        for(size_t i = 0; i < _Keys.size(); i++) {
+            memcpy(cloud -> at(i).data, _Keys[i].data(), sizeof(float) * DIM);
+        }
     }
     return cloud;
 }

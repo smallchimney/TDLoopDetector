@@ -52,8 +52,8 @@
 #ifndef __ROCKAUTO_TDLD_PC_BRIDGE_H__
 #define __ROCKAUTO_TDLD_PC_BRIDGE_H__
 
-#include "PCLKdPairsMatcher.hpp"
-#include "PCLRansacGeometryChecker.hpp"
+#include "GroupClusterMatcher.hpp"
+#include "PCLNdtGeometryChecker.hpp"
 #include <TDLoopDetector/TDLoopDetector.h>
 #include <TDBoW/PCBridge.h>
 
@@ -64,6 +64,9 @@ typedef TemplatedLoopDetector<TDBoW::FPFH33Database> FPFH33LoopDetector;
 
 /** @brief Point pairs matcher based on PCL implemented KD-Tree on FPFH-33 descriptor */
 typedef pc::PCLKdPairsMatcher<float, 33, 3> FPFH33KdPairsMatcher;
+
+/** @brief Point pairs matcher based on PCL implemented KD-Tree on FPFH-33 descriptor */
+typedef pc::GroupClusterMatcher<float, 33, pcl::PointXYZ> FPFH33GroupClusterMatcher;
 
 }
 

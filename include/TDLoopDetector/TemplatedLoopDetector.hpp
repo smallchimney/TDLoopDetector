@@ -19,13 +19,13 @@
  * Author: Dorian Galvez-Lopez
  * Description: templated loop detector
  * License: see the LICENSE.txt file
- *
  */
 
 #ifndef __ROCKAUTO_TDLD_TEMPLATED_LOOP_DETECTOR_HPP__
 #define __ROCKAUTO_TDLD_TEMPLATED_LOOP_DETECTOR_HPP__
 
 #include "Params.h"
+#include "Exception.h"
 #include "KeyPoint.h"
 #include "MatchPair.h"
 #include "Transform.h"
@@ -38,8 +38,51 @@
 
 namespace TDLoopDetector {
 
+/**
+ * @brief  Loop detector framework implement based on TDBoW library.
+ *         ======================================================================
+ *         This implement using the following pipeline:
+ *         (pre-done) Feature extraction and keypoints selection;
+ *         1. Transform keypoints' descriptors into BowVector (TDBoW library);
+ *         2. Query from history database for candidates, with similarity score;
+ *         3. Perform temporal consistency checking and select the best candidates
+ *            (Target entries, select only one best entry in current implement);
+ *         4. Found points corresponding matching based on descriptors between
+ *            the query entry and target entry.
+ *            Default implement is based direct index, which is introduce by DBoW2.
+ *            We also support our implement based on KD-tree. However, the current
+ *            implementation require PCL, so we didn't set it in default.
+ *         5. Perform geometric consistency checking based on the calculated
+ *            corresponding matches. We didn't support a default method for this,
+ *            since we didn't implement a templated RANSAC methods without other
+ *            heavy library. So the geometric consistency checking method must be
+ *            explicit defined in the detector constructor.
+ *         (finally) Update the history database and return the detection result;
+ *         Note that, sentence 2~5 all contain the possibility that get empty
+ *         output so skip the following steps (without finally step).
+ *         ======================================================================
+ *         Note: In case your method doesn't relied on the corresponding matches,
+ *         there are two optional choice:
+ *         1. (recommend) Set the constructor method parameter `_Matcher` to an
+ *            empty method, you can easily do that through lambda, and fill up
+ *            your custom geometry checking method.
+ *            It's recommended because we are planing to add pipeline timing
+ *            controlling in months, and your method will get benefit in it.
+ *         2. (~not recommend~) Set the detector with parameter `GEOM_OFF` and
+ *            complete your geometric consistency checking outside the loop
+ *            detector.
+ *            Since we output all the candidates and islands, you can do almost
+ *            every thing as you want. But it's not a wise choice because we may
+ *            get wrong timing result and dynamic adjust in a wrong way.
+ *            And more important, TDLoopDetector is just a framework, if your
+ *            pipeline has huge difference with it, you should implement your own
+ *            framework instead of using TDLoopDetector.
+ * @author smallchimney
+ * @tparam TDatabase  TDBoW `TemplatedDatabase implementation`
+ * @tparam Dim        Raw data's position dim, {@code 2} for image and {@code 3}
+ *                    for 3D pointcloud.
+ */
 template<class TDatabase, size_t Dim = 3>
-/// Generic Loop detector
 class TemplatedLoopDetector {
 public:
     // BoW database
@@ -71,50 +114,55 @@ public:
 public:
 
     /**
-     * @brief  Initialize a loop detector based on a vocabulary
-     * @author smallchimney
-     * @param  _GeomChecker Geometry check method based on matched points
-     *                      pair, keep {@code nullptr} when setting "GEOM_OFF"
-     * @param  _Vocabulary  The vocabulary to be used when query, initialized
-     *                      required, or will throw error when detection
-     * @param  _Param       Loop detector runtime parameters, see details in
-     *                      `Params.h`
-     * @param  _Filter      Match points pairs filter, aim to filter false-
-     *                      positive match, keep {@code nullptr} for no filter.
-     *                      Normal use in case "GEOM_ON" and not override `_Matcher`
-     * @param  _Matcher     Points pair matcher based on descriptors and keypoints.
-     *                      Keep {@code nullptr} when "GEOM_OFF" or using default
-     *                      points match method based on DI and descriptor distance.
-     *                      More details can be founded in `KeyPointMatcherDI()`
-     */
+      * @brief  Setup detector with runtime parameters, a pre-created vocabulary,
+      *         explicit geometric consistency checking method and optional extend
+      *         methods.
+      * @author smallchimney
+      * @param  _GeomChecker  The explicit given geometric consistency checking
+      *                       methods, this method is used to calculate geometric
+      *                       consistency based on pre-calculated corresponding.
+      *                       Kept {@code nullptr} when setting `GEOM_OFF`.
+      * @param  _Vocabulary   TDBoW vocabulary, should be guaranteed created, or will
+      *                       throw exception during the detection.
+      * @param  _Param        The detector parameters, more detail can be founded in
+      *                       `Params.h`
+      * @param  _Matcher      The corresponding maker extend API,
+      * @param  _Filter       The matches filter extend support, only use to filter
+      *                       the false positive match calculated based on DF
+      *                       {@code KeyPointMatcherDI()}. However this is very
+      *                       difficult, and we found DI work not so good. So we may
+      *                       deprecate this parameter in the future release.
+      */
     explicit TemplatedLoopDetector(const PointPairsGeomChecker& _GeomChecker,
             Vocabulary&& _Vocabulary, const params& _Param = params(),
-            const PointPairsFilter& _Filter = nullptr,
-            const KeyPointsMatcher& _Matcher = nullptr);
+            const KeyPointsMatcher& _Matcher = nullptr,
+            const PointPairsFilter& _Filter = nullptr) noexcept(false);
 
-    /**
-     * // todo: complete
-     * @brief  Setup detector in default parameters, load the database & vocabulary
-     *         (or only vocabulary) for initialization.
-     * @author smallchimney
-     * @param  _Param  loop detector parameters
-     */
+     /**
+      * @brief  Setup detector with runtime parameters, initialized database (empty,
+      *         just a vocabulary), explicit geometric consistency checking method and
+      *         optional extend methods.
+      * @author smallchimney
+      * @param  _GeomChecker  The explicit given geometric consistency checking
+      *                       methods, this method is used to calculate geometric
+      *                       consistency based on pre-calculated corresponding.
+      *                       Kept {@code nullptr} when setting `GEOM_OFF`.
+      * @param  _Database     IF && DF database, should be initialized with a active
+      *                       vocabulary, and be guaranteed empty (or will throw an
+      *                       exception inside the constructor).
+      * @param  _Param        The detector parameters, more detail can be founded in
+      *                       `Params.h`
+      * @param  _Matcher      The corresponding maker extend API,
+      * @param  _Filter       The matches filter extend support, only use to filter
+      *                       the false positive match calculated based on DF
+      *                       {@code KeyPointMatcherDI()}. However this is very
+      *                       difficult, and we found DI work not so good. So we may
+      *                       deprecate this parameter in the future release.
+      */
     explicit TemplatedLoopDetector(const PointPairsGeomChecker& _GeomChecker,
             TDatabase&& _Database, const params& _Param = params(),
-            const PointPairsFilter& _Filter = nullptr,
-            const KeyPointsMatcher& _Matcher = nullptr);
-
-//    /**
-//     * // todo: complete
-//     * @brief  Setup detector in default parameters, load the database & vocabulary
-//     *         (or only vocabulary) for initialization.
-//     * @author smallchimney
-//     * @param  _Param  loop detector parameters
-//     */
-//    explicit TemplatedLoopDetector(const PointPairsGeomChecker& _GeomChecker,
-//            const std::string& _Filename, const params& _Param = params(),
-//            const PointPairsFilter& _Filter = nullptr,
-//            const KeyPointsMatcher& _Matcher = nullptr);
+            const KeyPointsMatcher& _Matcher = nullptr,
+            const PointPairsFilter& _Filter = nullptr) noexcept(false);
 
     // todo: implement the constructors
 
@@ -131,7 +179,7 @@ public:
      * @param _Descriptors  Descriptors associated to the given key points
      * @param _Match (out)  Match or failing information
      * @return              If a loop is detected, the method will return
-     *                      the transform matrix from (todo: complete) to (todo: complete)
+     *                      the transform matrix from history to query
      *                      If not, a zero matrix will be returned.
      */
     Transform detectLoop(const KeyPointArray& _KeyPoints,
@@ -241,7 +289,7 @@ public:
      */
     const TDatabase& getDatabase() const noexcept(false) {
         if(!m_pDatabase) {
-            throw std::runtime_error(TDBOW_LOG("database is not ready yet."));
+            throw NotInitailizedException(TDBOW_LOG("database is not ready yet."));
         }
         return *m_pDatabase;
     }
@@ -252,7 +300,7 @@ public:
      */
     const Vocabulary& getVocabulary() const noexcept(false) {
         if(!m_pDatabase || !m_pDatabase -> ready()) {
-            throw std::runtime_error(TDBOW_LOG("vocabulary is not ready yet."));
+            throw NotInitailizedException(TDBOW_LOG("vocabulary is not ready yet."));
         }
         return m_pDatabase -> getVocabulary();
     }
@@ -430,11 +478,11 @@ template<class TDatabase, size_t Dim>
 TemplatedLoopDetector<TDatabase, Dim>::TemplatedLoopDetector(
         const PointPairsGeomChecker& _GeomChecker,
         Vocabulary&& _Vocabulary, const params& _Param,
-        const PointPairsFilter& _Filter, const KeyPointsMatcher& _Matcher)
+        const KeyPointsMatcher& _Matcher, const PointPairsFilter& _Filter) noexcept(false)
         : m_bStationaryDatabase(false), m_pDatabase(nullptr), m_sParams(_Param),
-        m_cKeyPointsMatcher(_Matcher), m_cPairsFilter(_Filter), m_cGeomChecker(_GeomChecker) {
-    if(m_cGeomChecker == nullptr) {
-        throw std::runtime_error(TDBOW_LOG("The geometry check method is required!"));
+        m_cKeyPointsMatcher(_Matcher), m_cPairsFilter(_Filter), m_cGeomChecker(_GeomChecker)  {
+    if(m_sParams.geom_check != GEOM_OFF && m_cGeomChecker == nullptr) {
+        throw LogicException(TDBOW_LOG("The geometry check method is required!"));
     }
     setVocabulary(std::forward<Vocabulary>(_Vocabulary));
 }
@@ -443,11 +491,11 @@ template<class TDatabase, size_t Dim>
 TemplatedLoopDetector<TDatabase, Dim>::TemplatedLoopDetector(
         const PointPairsGeomChecker& _GeomChecker,
         TDatabase&& _Database, const params& _Param,
-        const PointPairsFilter& _Filter, const KeyPointsMatcher& _Matcher)
+        const KeyPointsMatcher& _Matcher, const PointPairsFilter& _Filter) noexcept(false)
         : m_bStationaryDatabase(false), m_pDatabase(nullptr), m_sParams(_Param),
         m_cKeyPointsMatcher(_Matcher), m_cPairsFilter(_Filter), m_cGeomChecker(_GeomChecker) {
-    if(m_cGeomChecker == nullptr) {
-        throw std::runtime_error(TDBOW_LOG("The geometry check method is required!"));
+    if(m_sParams.geom_check != GEOM_OFF && m_cGeomChecker == nullptr) {
+        throw LogicException(TDBOW_LOG("The geometry check method is required!"));
     }
     _Database.clear();
     setDatabase(std::forward<TDatabase>(_Database));
@@ -469,7 +517,7 @@ Transform TemplatedLoopDetector<TDatabase, Dim>::detectLoop(const KeyPointArray&
         const DescriptorArray& _Descriptors, DetectionResult& _Match) {
     assert(_Descriptors.size() == _KeyPoints.size());
     if(!ready()) {
-        throw std::runtime_error(TDBOW_LOG(
+        throw NotInitailizedException(TDBOW_LOG(
                 "Cannot found vocabulary, query require a valid vocabulary."));
     }
     Transform transform = Transform::Zero();
@@ -484,7 +532,7 @@ Transform TemplatedLoopDetector<TDatabase, Dim>::detectLoop(const KeyPointArray&
 
     if(m_uEntryId <= m_sParams.dead_zone) {
         if(m_bStationaryDatabase) {
-            throw std::runtime_error(TDBOW_LOG(
+            throw ParametersException(TDBOW_LOG(
                     "Too few entries for a stationary database."));
         }
         m_pDatabase -> add(bowVector, featureVec);
@@ -497,9 +545,8 @@ Transform TemplatedLoopDetector<TDatabase, Dim>::detectLoop(const KeyPointArray&
         return transform;
     }
     auto result = getDatabase().query(bowVector,
-            m_sParams.max_db_results, 0, m_uEntryId - m_sParams.dead_zone);
-    do {
-        // declare loop only for break
+            m_sParams.max_db_results, m_uEntryId - m_sParams.dead_zone, 0);
+    do { // declare loop only for break
         if(result.empty()) {
             _Match.status = NO_DB_RESULTS; break;
         }
@@ -681,11 +728,11 @@ TemplatedLoopDetector<TDatabase, Dim>::setDatabase(DatabasePtr&& _DB,
         if(!_DescriptorsDB || !_KeyPointsDB
                 || (_DescriptorsDB -> size() != m_pDatabase -> size())
                 || (_KeyPointsDB -> size() != m_pDatabase -> size())) {
-            throw std::runtime_error(TDBOW_LOG("Database not matched."));
+            throw LogicException(TDBOW_LOG("Database not matched."));
         }
         for(size_t i = 0; i < _DescriptorsDB -> size(); i++) {
             if((*_DescriptorsDB)[i].size() != (*_KeyPointsDB)[i].size()) {
-                throw std::runtime_error(TDBOW_LOG("Database not matched."));
+                throw LogicException(TDBOW_LOG("Database not matched."));
             }
         }
         m_pDescriptorsDb = std::forward<DescriptorsDatabasePtr>(_DescriptorsDB);

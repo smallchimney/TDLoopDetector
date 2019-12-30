@@ -219,8 +219,9 @@ void testLoopDetect(const DescriptorsSet& _Features,
         cout << "Try to detect image " << _Names[i] << "..." << endl;
         DetectionResult result;
         auto transform = detector.detectLoop(_KeyPoints[i], _Features[i], result);
+        auto matchedFile = result.bestCandidate ? _Names[result.bestCandidate -> id] : "";
         if(result.detected()) {
-            cout << "- Loop found with image " << _Names[result.match] << "!" << endl;
+            cout << "- Loop found with image " << matchedFile << "!" << endl;
             cout << "transform matrix:" << endl << transform << endl;
         } else {
             cout << "- No loop: ";
@@ -251,17 +252,17 @@ void testLoopDetect(const DescriptorsSet& _Features,
 
                 case NO_GROUPS:
                     cout << "Not enough close matches to create groups. "
-                         << "Best candidate: " << _Names[result.match] << endl;
+                         << "Best candidate: " << matchedFile << endl;
                     break;
 
                 case NO_TEMPORAL_CONSISTENCY:
                     cout << "No temporal consistency (k: " << params.k << "). "
-                         << "Best candidate: " << _Names[result.match] << endl;
+                         << "Best candidate: " << matchedFile << endl;
                     break;
 
                 case NO_GEOMETRICAL_CONSISTENCY:
                     cout << "No geometrical consistency. Best candidate: "
-                         << _Names[result.match] << endl;
+                         << matchedFile << endl;
                     break;
 
                 default:

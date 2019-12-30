@@ -19,11 +19,12 @@
    * Author Email  : smallchimney@foxmail.com
    * Created Time  : 2019-12-14 15:28:39
    * Last Modified : smallchimney
-   * Modified Time : 2019-12-15 18:43:04
+   * Modified Time : 2019-12-27 14:24:26
 ************************************************************************* */
 #ifndef __ROCKAUTO_TDLD_PC_PCL_KD_PAIRS_MATCHER_HPP__
 #define __ROCKAUTO_TDLD_PC_PCL_KD_PAIRS_MATCHER_HPP__
 
+#include <TDLoopDetector/Exception.h>
 #include <TDLoopDetector/PairsMatcher.h>
 
 #include <pcl/kdtree/impl/kdtree_flann.hpp>
@@ -62,9 +63,9 @@ public:
      * @return The suitable `KeyPointsMatcher` callback attached with current instance
      */
     KeyPointsMatcher matcher() noexcept override {
-        using namespace std::placeholders;
         return std::bind(&PCLKdPairsMatcher<TScalar, L, Dim>::doKeyPointsMatch,
-                         this, _1, _2, _3, _4);
+                         this, std::placeholders::_1, std::placeholders::_2,
+                         std::placeholders::_3, std::placeholders::_4);
     }
 
     /**
@@ -89,20 +90,46 @@ public:
      * @brief  Set the scene descriptors, only needed in scene-model mode.
      * @author smallchimney
      * @param  _Ptr  Descriptors for each point in the scene.
+     * @return       The instance itself
      */
-    void setSceneDesc(const DescPointCloudPtr& _Ptr) noexcept {
+    PCLKdPairsMatcher& setSceneDesc(const DescPointCloudPtr& _Ptr) noexcept {
         m_pSceneDesc.reset(_Ptr);
+        return *this;
     }
 
     /**
      * @brief  Set the scene descriptors, only needed in scene-model mode.
      * @author smallchimney
      * @param  _Descriptors  Descriptors for each point in the scene.
+     * @return     The instance itself
      */
-    void setSceneDesc(const DescriptorArray& _Descriptors) noexcept {
+    PCLKdPairsMatcher& setSceneDesc(const DescriptorArray& _Descriptors) noexcept {
         m_pSceneDesc.reset(new DescPointCloud);
         m_pSceneDesc -> points = _Descriptors;
         m_pSceneDesc -> resize(m_pSceneDesc -> points.size());
+        return *this;
+    }
+
+    /**
+     * @brief  Set the how many points in model will be selected for
+     *         each point in scene.
+     * @author smallchimney
+     * @param  _K  The high limit of the selected points' number of each
+     *             scene point.
+     * @return     The instance itself
+     */
+    PCLKdPairsMatcher& setSelectedNum(const size_t _K) {
+        m_ulK = _K;
+        return *this;
+    }
+
+    /**
+     * @brief  Get the current setting selected number.
+     * @author smallchimney
+     * @return The current setting selected number.
+     */
+    size_t getSelectedNum() const noexcept {
+        return m_ulK;
     }
 
 protected:
@@ -170,17 +197,18 @@ template <typename TScalar, size_t L, size_t Dim>
 MatchPairArray PCLKdPairsMatcher<TScalar, L, Dim>::doKeyPointsMatch(
         const DescriptorArray& _HistoryDesc, const KeyPointArray& _HistoryKp,
         const DescriptorArray& _QueryDesc, const KeyPointArray& _QueryKp) {
+    assert(_HistoryDesc.size() == _HistoryKp.size() && _QueryDesc.size() == _QueryKp.size());
     if(!m_bSceneModelMode) {
-        throw std::runtime_error(TDBOW_LOG("The scene-scene mode hadn't been complete yet."));
+        throw LogicException(TDBOW_LOG("The model-model mode hadn't been complete yet."));
     } else {
         if(m_pSceneDesc == nullptr) {
-            throw std::runtime_error(TDBOW_LOG("The scene descriptors is required in "
+            throw NotInitailizedException(TDBOW_LOG("The scene descriptors is required in "
                     "scene-model mode, please call `setSceneDesc()` before `detectLoop()`"));
         }
         auto modelDesc = boost::make_shared<DescPointCloud>();
         modelDesc -> points = _HistoryDesc;
         modelDesc -> resize(modelDesc -> points.size());
-        const auto& ret = _sceneModelMatcher(m_fFilterFactor, m_ulK, modelDesc, m_pSceneDesc);
+        auto ret = _sceneModelMatcher(m_fFilterFactor, m_ulK, modelDesc, m_pSceneDesc);
         m_pSceneDesc.reset();
         return ret;
     }
