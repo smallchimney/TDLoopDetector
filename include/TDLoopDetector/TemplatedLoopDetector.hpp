@@ -496,13 +496,19 @@ Transform TemplatedLoopDetector<TDatabase, Dim>::detectLoop(const KeyPointArray&
         _Match.status = CLOSE_MATCHES_ONLY;
         return transform;
     }
-
     auto result = getDatabase().query(bowVector,
-            m_sParams.max_db_results, m_uEntryId - m_sParams.dead_zone);
-    do { // declare loop only for break
+            m_sParams.max_db_results, 0, m_uEntryId - m_sParams.dead_zone);
+    do {
+        // declare loop only for break
         if(result.empty()) {
             _Match.status = NO_DB_RESULTS; break;
         }
+        // save all candidates
+        _Match.allCandidates.reserve(result.size());
+        for(const auto& ret: result) {
+             _Match.allCandidates.emplace_back(ret);
+        }
+
         // factor to compute normalized similarity score, if necessary
         auto factor = m_sParams.use_nss ?
                       getVocabulary().score(bowVector, m_mLastBow) : 1.0;
@@ -526,14 +532,19 @@ Transform TemplatedLoopDetector<TDatabase, Dim>::detectLoop(const KeyPointArray&
         computeIslands(result, islands);
         if(islands.empty()) {
             // the best candidate is the one with highest score by now
-            _Match.match = result[0].Id;
+            _Match.bestCandidate.reset(new Candidate(result[0]));
             _Match.status = NO_GROUPS; break;
+        }
+
+        // save selected candidates
+        for(const auto& island: islands) {
+            _Match.selectCandidates.emplace_back(Candidate(island));
         }
         Island island;
         while(true) {
             if(islands.empty()) {
                 // the best candidate is the one with highest score by now
-                _Match.match = result[0].Id;
+                _Match.bestCandidate.reset(new Candidate(result[0]));
                 _Match.status = LOW_GROUPS_SCORE; break;
             }
             const auto iter = std::max_element(islands.begin(), islands.end());
@@ -546,7 +557,7 @@ Transform TemplatedLoopDetector<TDatabase, Dim>::detectLoop(const KeyPointArray&
         }
         if(_Match.status == LOW_GROUPS_SCORE)break;
         // get the best candidate (maybe match)
-        _Match.match = island.best_entry;
+        _Match.bestCandidate.reset(new Candidate(island));
         // check temporal consistency of this island
         updateTemporalWindow(island);
         if(m_sWindow.size() <= m_sParams.k) {
@@ -847,7 +858,6 @@ MatchPairArray TemplatedLoopDetector<TDatabase, Dim>::findMatchesByDistance(
                 bestScore[1] = score;
             }
         }
-        auto tmp = bestScore[0] / bestScore[1]; // todo: delete me
         if(bestScore[0] / bestScore[1] <= m_sParams.max_neighbor_ratio) {
             bool alreadyMatched = false;
             for(auto& pair : results) {

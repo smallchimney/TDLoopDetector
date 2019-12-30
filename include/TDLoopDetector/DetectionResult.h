@@ -25,13 +25,13 @@
 #define __ROCKAUTO_TDLD_DETECTION_RESULT_H__
 
 #include <TDBoW/QueryResults.h>
+#include <TDLoopDetector/Island.h>
 
 namespace TDLoopDetector {
 
     /// Reasons for dismissing loops
     enum DetectionStatus {
-        /// Loop correctly detected
-        LOOP_DETECTED,
+        UNKOWN = 0,
         /// All the matches are very recent
         CLOSE_MATCHES_ONLY,
         /// No matches against the database
@@ -47,8 +47,37 @@ namespace TDLoopDetector {
         /// Not enough temporary consistent matches (k)
         NO_TEMPORAL_CONSISTENCY,
         /// The geometrical consistency failed
-        NO_GEOMETRICAL_CONSISTENCY
+        NO_GEOMETRICAL_CONSISTENCY = 99,
+        /// Loop correctly detected
+        LOOP_DETECTED = 100
     };
+
+    /// Candidate of a detection
+    typedef struct sCandidate{
+        typedef TDBoW::traits::basic_traits<sCandidate>::Ptr Ptr;
+        typedef TDBoW::traits::basic_traits<sCandidate>::ConstPtr ConstPtr;
+        typedef TDBoW::EntryId EntryId;
+        typedef TDBoW::Result  Result;
+
+        sCandidate() = default;
+
+        sCandidate(const Result& _queryResult) {
+            id = _queryResult.Id;
+            score = _queryResult.Score;
+        }
+
+        sCandidate(const sIsland& _isResult) {
+            id = _isResult.best_entry;
+            score = _isResult.best_score;
+        }
+
+        /// Matched id
+        EntryId id;
+        /// The score of the candidate
+        double  score;
+    } Candidate;
+    typedef Candidate::Ptr CandidatePtr;
+    typedef Candidate::ConstPtr CandidateConstPtr;
 
     /// Result of a detection
     typedef struct sDetectionResult {
@@ -56,18 +85,29 @@ namespace TDLoopDetector {
         typedef TDBoW::traits::basic_traits<sDetectionResult>::ConstPtr ConstPtr;
         typedef TDBoW::EntryId EntryId;
 
-        /// Detection status. LOOP_DETECTED iff loop detected
-        DetectionStatus status;
+        sDetectionResult() = default;
+
+        /// Detection status. LOOP_DETECTED if loop detected
+        DetectionStatus status = UNKOWN;
         /// Query id
-        EntryId query;
+        EntryId query{};
         /// Matched id if loop detected, otherwise, best candidate
-        EntryId match;
+        /// Best Candidate
+        CandidateConstPtr bestCandidate = nullptr;
+        /// All Candidates
+        std::vector<Candidate> allCandidates;
+        /// Selected Candidate
+        std::vector<Candidate> selectCandidates;
+
+        operator bool() const noexcept {
+            return detected();
+        }
 
         /**
-        * Checks if the loop was detected
-        * @return true iff a loop was detected
+        * @brief  Checks if the loop was detected
+        * @return true if a loop was detected
         */
-        bool detected() const {
+        bool detected() const noexcept {
             return status == LOOP_DETECTED;
         }
     } DetectionResult;
